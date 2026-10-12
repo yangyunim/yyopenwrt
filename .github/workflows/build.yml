@@ -1,0 +1,112 @@
+name: build-fwallow
+
+# 触发方式：
+#  1) 推送 v* 开头的 tag（发版）：git tag v0.1.0 && git push --tags
+#  2) 或手动在 Actions 页面点击 Run workflow
+# 效果：自动打包两个 .ipk + 生成 opkg 索引，发布到 gh-pages 分支，
+#      路由器端即可 opkg update / opkg upgrade。
+#
+# 注意：打包走「轻量路径」（ipkg-build 直接打包纯脚本/JS 包，无需 OpenWrt
+#      编译环境）。若包内含需编译的 C 代码，请改用 OpenWrt 源码树编译。
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: fwallow-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell syntax check (sh -n)
+        run: |
+          set -e
+          for f in \
+            fwallow/files/etc/init.d/fwallow \
+            fwallow/files/etc/hotplug.d/iface/20-fwallow \
+            fwallow/files/etc/uci-defaults/fwallow \
+            fwallow/files/usr/bin/fwallow-sync \
+            fwallow/files/usr/bin/fwallow-update ; do
+            sh -n "$f"
+          done
+          echo "all shell scripts OK"
+
+      - name: Install opkg-utils (ipkg-build, opkg-make-index)
+        run: sudo apt-get update && sudo apt-get install -y opkg-utils
+
+      - name: Build fwallow (.ipk)
+        run: |
+          set -e
+          ver=$(sed -n 's/^PKG_VERSION:=//p' fwallow/Makefile)
+          rel=$(sed -n 's/^PKG_RELEASE:=//p' fwallow/Makefile)
+          [ -n "$ver" ] && [ -n "$rel" ] || { echo "version parse failed"; exit 1; }
+          d=fwallow-pkg
+          rm -rf "$d"; mkdir -p "$d/CONTROL"
+          cp -a fwallow/files/. "$d/"
+          cat > "$d/CONTROL/control" <<EOF
+Package: fwallow
+Version: $ver-$rel
+Architecture: all
+Maintainer: fwallow developer <you@example.com>
+Section: net
+Priority: optional
+Depends: firewall4
+Description: Domain/IP allowlist for firewall port forwards (fw4)
+EOF
+          printf '/etc/config/fwallow\n/etc/crontabs/root\n' > "$d/CONTROL/conffiles"
+          mkdir -p out
+          ipkg-build "$d" out
+
+      - name: Build luci-app-fwallow (.ipk)
+        run: |
+          set -e
+          ver=$(sed -n 's/^PKG_VERSION:=//p' luci-app-fwallow/Makefile)
+          rel=$(sed -n 's/^PKG_RELEASE:=//p' luci-app-fwallow/Makefile)
+          [ -n "$ver" ] && [ -n "$rel" ] || { echo "version parse failed"; exit 1; }
+          d=luci-pkg
+          rm -rf "$d"; mkdir -p "$d/CONTROL"
+          cp -a luci-app-fwallow/htdocs "$d/"
+          cp -a luci-app-fwallow/root "$d/"
+          cat > "$d/CONTROL/control" <<EOF
+Package: luci-app-fwallow
+Version: $ver-$rel
+Architecture: all
+Maintainer: fwallow developer <you@example.com>
+Section: luci
+Priority: optional
+Depends: fwallow, luci-app-firewall, luci-base
+Description: LuCI UI for fwallow allowlist port forwards
+EOF
+          mkdir -p out
+          ipkg-build "$d" out
+
+      - name: Generate opkg index (Packages / Packages.gz)
+        run: opkg-make-index out
+
+      - name: Deploy feed to GitHub Pages (gh-pages branch)
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: out
+          publish_branch: gh-pages
+
+      # 同时把 .ipk 挂到本次 Release 上，方便直接下载
+      - name: Attach artifacts to Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: out/*.ipk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

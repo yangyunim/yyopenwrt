@@ -1,0 +1,4 @@
+#!/bin/sh
+# fwallow: WAN 重新拨号后立即刷新域名白名单 IP
+[ "$ACTION" = "ifup" ] || exit 0
+/usr/bin/fwallow-update

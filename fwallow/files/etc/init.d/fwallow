@@ -1,0 +1,33 @@
+#!/bin/sh /etc/rc.common
+#
+# fwallow - 域名/IP 白名单端口转发（fw4）
+#
+# 机制：
+#  - procd 监视 /etc/config/fwallow，配置一旦被 uci commit（LuCI 保存）
+#    就自动重启本服务实例 -> 运行 fwallow-sync 重新生成 firewall 配置
+#  - fwallow-sync 把 group/forward 翻译为 firewall 的 ipset/redirect 段，
+#    提交后由 firewall 服务自身的 procd 文件监视触发 fw4 reload
+#  - fwallow-update 解析域名 IP 写入 loadfile，再执行 fw4 reload-sets
+#    只刷新集合元素、不整体重载规则
+
+START=99
+STOP=10
+USE_PROCD=1
+
+start_service() {
+	# 域名定时刷新依赖 cron；确保其已启用（iStoreOS 等固件默认可能未启用）
+	[ -x /etc/init.d/cron ] && { /etc/init.d/cron enabled || /etc/init.d/cron enable; }
+
+	procd_open_instance
+	procd_set_param command /usr/bin/fwallow-sync
+	procd_set_param respawn 0
+	procd_set_param file /etc/config/fwallow
+	procd_close_instance
+
+	/usr/bin/fwallow-update
+}
+
+reload_service() {
+	/usr/bin/fwallow-sync
+	/usr/bin/fwallow-update
+}

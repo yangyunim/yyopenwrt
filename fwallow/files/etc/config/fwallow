@@ -1,0 +1,23 @@
+# fwallow - 域名/IP 白名单端口转发（fw4）
+#
+# forward: 端口转发规则，每个规则可配置任意多个域名（list domain）
+#          和任意多个静态 IP/CIDR（list ip），全部并集作为来源白名单。
+#          - domain：由 fwallow-update 定时解析（cron 每 10 分钟 + WAN 重拨）
+#            一个域名解析出的多个 IP、多个域名的所有 IP 都会加入白名单
+#          - ip：静态来源，始终放行（支持单个 IP 与 CIDR 网段）
+#          只有来源 IP 命中白名单的客户端才能被 DNAT 到内网主机；
+#          其余来源走 wan 区默认策略（REJECT/DROP）。
+#
+# 示例（默认禁用，安装后不会改动防火墙行为）：
+
+config forward 'example'
+	option name 'Example allowlist forward'
+	option proto 'tcp'
+	option src_dport '80'
+	option dest_ip '192.168.1.100'
+	option dest_port '80'
+	list domain 'example.com'
+	list domain 'cdn.example.net'
+	list ip '203.0.113.8'
+	list ip '198.51.100.0/24'
+	option enabled '0'

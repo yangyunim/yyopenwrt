@@ -1,0 +1,5 @@
+#!/bin/sh
+# fwallow 首次安装初始化：启用服务并同步一次
+mkdir -p /etc/fwallow.d
+/etc/init.d/fwallow enable
+exit 0

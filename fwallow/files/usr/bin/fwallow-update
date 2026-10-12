@@ -1,0 +1,44 @@
+#!/bin/sh
+# fwallow-update
+# 为每个转发规则解析其全部域名 → 写入该规则专属集合的 loadfile，
+# 然后 fw4 reload-sets 刷新集合（只更新元素，不重载规则、不断流）。
+# 一个域名解析出的多个 IP、多个域名的所有 IP 都会并集写入。
+# 触发：cron（每 10 分钟）、WAN 重拨 hotplug、服务启动。
+
+. /lib/functions.sh
+
+FWDIR=/etc/fwallow.d
+[ -d "$FWDIR" ] || mkdir -p "$FWDIR"
+
+update_forward() {
+	local cfg="$1" domains out
+	config_get enabled "$cfg" enabled 1
+	[ "$enabled" = "0" ] && return 0
+	config_get domains "$cfg" domain
+	[ -n "$domains" ] || return 0
+
+	out="$FWDIR/fwallow_rdr_$cfg.list"
+	: > "$out"
+
+	for d in $domains; do
+		[ -n "$d" ] || continue
+		if command -v dig >/dev/null 2>&1; then
+			dig +short A "$d" 2>/dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' >> "$out"
+		else
+			nslookup "$d" 2>/dev/null | sed -n 's/^Address.*: //p' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' >> "$out"
+		fi
+	done
+}
+
+config_load fwallow
+config_foreach update_forward forward
+
+# 每个集合文件去重排序（顺序无关）
+for f in "$FWDIR"/*.list; do
+	[ -f "$f" ] || continue
+	sort -u -o "$f" "$f"
+done
+
+# 只刷新集合元素；若报 "Named set ... does not exist" 说明集合未创建，
+# 先执行一次 /etc/init.d/firewall reload（正常由 fwallow-sync 提交触发）。
+fw4 reload-sets 2>/dev/null || /etc/init.d/firewall reload

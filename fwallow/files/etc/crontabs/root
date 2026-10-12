@@ -1,0 +1,2 @@
+# fwallow: 每 10 分钟刷新域名白名单的解析 IP
+*/10 * * * * /usr/bin/fwallow-update

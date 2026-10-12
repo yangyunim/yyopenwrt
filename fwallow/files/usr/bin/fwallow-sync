@@ -1,0 +1,70 @@
+#!/bin/sh
+# fwallow-sync
+# 把 /etc/config/fwallow 的转发规则(forward)翻译生成到 /etc/config/firewall：
+#  - 每个 forward 生成一个专属 nftables 集合（fwallow_rdr_<段id>），
+#    集合元素 = 静态 IP/CIDR（entry）+ 域名解析 IP（loadfile，由 fwallow-update 填充）
+#  - 每个 forward 生成一条 redirect，引用该集合（ip saddr @集合）
+# 支持每个规则任意多个域名 + 任意多个 IP（并集放行）。
+# 幂等：先清理旧的 fwallow_* 命名段，再重建。
+
+. /lib/functions.sh
+
+FWDIR=/etc/fwallow.d
+
+# 1) 清理上次生成的段
+for sec in $(uci show firewall 2>/dev/null | sed -n 's/^firewall\.\(fwallow_[^.=]*\).*/\1/p' | sort -u); do
+	uci -q delete "firewall.$sec"
+done
+
+gen_forward() {
+	local cfg="$1"
+	config_get enabled "$cfg" enabled 1
+	[ "$enabled" = "0" ] && return 0
+
+	config_get name "$cfg" name
+	config_get src "$cfg" src wan
+	config_get dest "$cfg" dest lan
+	config_get proto "$cfg" proto tcp
+	config_get src_dport "$cfg" src_dport
+	config_get dest_ip "$cfg" dest_ip
+	config_get dest_port "$cfg" dest_port
+	config_get domains "$cfg" domain
+	config_get ips "$cfg" ip
+
+	[ -n "$dest_ip" ] || { logger -t fwallow "forward '$cfg' has no dest_ip, skipped"; return 0; }
+	[ -n "$domains" ] || [ -n "$ips" ] || { logger -t fwallow "forward '$cfg' has no domain/ip allowlist, skipped"; return 0; }
+	[ "$proto" = "tcpudp" ] && proto="tcp udp"
+
+	local set="fwallow_rdr_$cfg"
+
+	# 白名单集合：多个域名解析 IP + 多个静态 IP/CIDR 的并集
+	uci set "firewall.$set"=ipset
+	uci set "firewall.$set.name"="$set"
+	uci set "firewall.$set.family"=ipv4
+	uci add_list "firewall.$set.match"=src_ip
+	uci set "firewall.$set.loadfile"="$FWDIR/$set.list"
+	uci set "firewall.$set.reload_set"=1
+	[ -n "$name" ] && uci set "firewall.$set.comment"="fwallow $cfg"
+
+	local ip
+	for ip in $ips; do
+		[ -n "$ip" ] && uci add_list "firewall.$set.entry"="$ip"
+	done
+
+	# 端口转发：只放行命中集合的来源
+	local sec="fwallow_rdr_${cfg}_r"
+	uci set "firewall.$sec"=redirect
+	uci set "firewall.$sec.name"="${name:-fwallow $cfg}"
+	uci set "firewall.$sec.src"="$src"
+	uci set "firewall.$sec.dest"="$dest"
+	uci set "firewall.$sec.proto"="$proto"
+	[ -n "$src_dport" ] && uci set "firewall.$sec.src_dport"="$src_dport"
+	uci set "firewall.$sec.dest_ip"="$dest_ip"
+	[ -n "$dest_port" ] && uci set "firewall.$sec.dest_port"="$dest_port"
+	uci set "firewall.$sec.ipset"="$set"
+}
+
+config_load fwallow
+config_foreach gen_forward forward
+
+uci commit firewall

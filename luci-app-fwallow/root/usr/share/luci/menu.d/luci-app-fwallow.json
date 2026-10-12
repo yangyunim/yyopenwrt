@@ -1,0 +1,11 @@
+{
+	"admin/network/firewall/fwallow": {
+		"title": "域名白名单转发",
+		"order": 40,
+		"depends": {
+			"uci": {
+				"fwallow": true
+			}
+		}
+	}
+}

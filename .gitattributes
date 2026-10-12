@@ -1,0 +1,7 @@
+# 统一 LF 行尾：OpenWrt shell 脚本要求 LF（CRLF 会导致 bad interpreter），
+# 也保证 GitHub Actions(Linux) 与路由器上的行为一致。
+* text eol=lf
+
+# 纯二进制/生成物不参与行尾处理
+*.ipk binary
+*.gz binary

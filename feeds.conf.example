@@ -1,0 +1,6 @@
+# fwallow feed - 域名/IP 白名单端口转发（fw4）
+# 用法：把下面这行加入 OpenWrt 源码目录的 feeds.conf（或 feeds.conf.default），
+#       然后：
+#   ./scripts/feeds update fwallow
+#   ./scripts/feeds install -a -p fwallow
+src-git fwallow https://github.com/yangyunim/yyopenwrt.git
