@@ -55,16 +55,7 @@ jobs:
           d=fwallow-pkg
           rm -rf "$d"; mkdir -p "$d/CONTROL"
           cp -a fwallow/files/. "$d/"
-          cat > "$d/CONTROL/control" <<EOF
-Package: fwallow
-Version: $ver-$rel
-Architecture: all
-Maintainer: fwallow developer <you@example.com>
-Section: net
-Priority: optional
-Depends: firewall4
-Description: Domain/IP allowlist for firewall port forwards (fw4)
-EOF
+          sed "s/@VERSION@/$ver-$rel/" packaging/fwallow.control > "$d/CONTROL/control"
           printf '/etc/config/fwallow\n/etc/crontabs/root\n' > "$d/CONTROL/conffiles"
           mkdir -p out
           ipkg-build "$d" out
@@ -79,16 +70,7 @@ EOF
           rm -rf "$d"; mkdir -p "$d/CONTROL"
           cp -a luci-app-fwallow/htdocs "$d/"
           cp -a luci-app-fwallow/root "$d/"
-          cat > "$d/CONTROL/control" <<EOF
-Package: luci-app-fwallow
-Version: $ver-$rel
-Architecture: all
-Maintainer: fwallow developer <you@example.com>
-Section: luci
-Priority: optional
-Depends: fwallow, luci-app-firewall, luci-base
-Description: LuCI UI for fwallow allowlist port forwards
-EOF
+          sed "s/@VERSION@/$ver-$rel/" packaging/luci-app-fwallow.control > "$d/CONTROL/control"
           mkdir -p out
           ipkg-build "$d" out
 

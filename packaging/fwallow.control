@@ -1,0 +1,8 @@
+Package: fwallow
+Version: @VERSION@
+Architecture: all
+Maintainer: fwallow developer <you@example.com>
+Section: net
+Priority: optional
+Depends: firewall4
+Description: Domain/IP allowlist for firewall port forwards (fw4)

@@ -143,7 +143,7 @@ opkg update && opkg upgrade fwallow luci-app-fwallow
 2. 改代码后递增两个 Makefile 里的 `PKG_VERSION` / `PKG_RELEASE`，然后：
    ```sh
    git add -A && git commit -m "release 0.1.0"
-   git tag v0.2.0 && git push && git push --tags
+   git tag v0.2.1 && git push && git push --tags
    ```
 3. Actions 自动：打包 `fwallow_<ver>_all.ipk` 与 `luci-app-fwallow_<ver>_all.ipk` → 生成 `Packages` 索引 → 发布到 gh-pages → 挂到 Release。
 4. 路由器端 `opkg update && opkg upgrade fwallow luci-app-fwallow` 完成更新。

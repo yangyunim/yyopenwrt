@@ -1,0 +1,8 @@
+Package: luci-app-fwallow
+Version: @VERSION@
+Architecture: all
+Maintainer: fwallow developer <you@example.com>
+Section: luci
+Priority: optional
+Depends: fwallow, luci-app-firewall, luci-base
+Description: LuCI UI for fwallow allowlist port forwards
